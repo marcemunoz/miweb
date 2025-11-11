@@ -1,0 +1,61 @@
+name: CI/CD Pipeline - MiWeb (API + Worker)
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  api-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build API
+        run: docker build -t api-test ./api
+      - name: Test API
+        run: docker run --rm api-test npm test
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push API
+        run: |
+          docker tag api-test ${{ secrets.DOCKERHUB_USERNAME }}/api:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/api:latest
+
+  worker-ci:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Build Worker
+        run: docker build -t worker-test ./worker
+      - name: Test Worker
+        run: docker run --rm worker-test npm test
+      - uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Push Worker
+        run: |
+          docker tag worker-test ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
+          docker push ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
+
+  deploy-ssh:
+    runs-on: ubuntu-latest
+    needs: [api-ci, worker-ci]
+    steps:
+      - uses: actions/checkout@v3
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1.1.0
+        with:
+          host: ${{ secrets.MINIKUBE_IP }}
+          username: ${{ secrets.MINIKUBE_USER }}
+          key: ${{ secrets.MINIKUBE_SSH_KEY }}
+          script: |
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/api:latest
+            docker pull ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
+            kubectl apply -f k8s/api-deployment.yaml
+            kubectl apply -f k8s/api-service.yaml
+            kubectl apply -f k8s/worker-deployment.yaml
+            kubectl apply -f k8s/worker-service.yaml
