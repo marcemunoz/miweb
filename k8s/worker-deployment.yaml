@@ -1,13 +1,19 @@
 apiVersion: apps/v1
 kind: Deployment
-metadata: { name: worker }
+metadata:
+  name: worker
 spec:
   replicas: 1
-  selector: { matchLabels: { app: worker } }
+  selector:
+    matchLabels:
+      app: worker
   template:
-    metadata: { labels: { app: worker } }
+    metadata:
+      labels:
+        app: worker
     spec:
       containers:
       - name: worker
         image: marcemo123/worker:latest
-        
+        ports:
+        - containerPort: 3000
