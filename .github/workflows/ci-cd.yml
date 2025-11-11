@@ -7,6 +7,10 @@ on:
     branches: [ main ]
 
 jobs:
+
+  # ==========================================================
+  # ✅ CI: Construcción, test y push de API
+  # ==========================================================
   api-ci:
     runs-on: ubuntu-latest
     steps:
@@ -21,7 +25,6 @@ jobs:
       - name: Build API
         run: docker build -t api-test ./api
 
-        # Solo si tienes tests, si no, déjalo así igual
       - name: Test API
         run: docker run --rm api-test npm test || echo "No tests"
 
@@ -35,6 +38,10 @@ jobs:
           docker tag api-test ${{ secrets.DOCKERHUB_USERNAME }}/api:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/api:latest
 
+
+  # ==========================================================
+  # ✅ CI: Construcción, test y push del Worker
+  # ==========================================================
   worker-ci:
     runs-on: ubuntu-latest
     steps:
@@ -61,3 +68,46 @@ jobs:
         run: |
           docker tag worker-test ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
           docker push ${{ secrets.DOCKERHUB_USERNAME }}/worker:latest
+
+
+  # ==========================================================
+  # ✅ CD: Despliegue en Kubernetes (API + Worker)
+  # ==========================================================
+  deploy:
+    runs-on: ubuntu-latest
+    needs: [api-ci, worker-ci]    # ← despliega solo cuando los dos pasen
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install kubectl
+        run: |
+          curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl"
+          chmod +x kubectl
+          sudo mv kubectl /usr/local/bin/
+
+      - name: Configure kubeconfig
+        run: |
+          mkdir -p ~/.kube
+          echo "${{ secrets.KUBECONFIG_CONTENT }}" > ~/.kube/config
+
+      - name: Update image names in manifests
+        run: |
+          sed -i "s|API_IMAGE_PLACEHOLDER|${{ secrets.DOCKERHUB_USERNAME }}/api:latest|g" ./k8s/api-deployment.yaml
+          sed -i "s|WORKER_IMAGE_PLACEHOLDER|${{ secrets.DOCKERHUB_USERNAME }}/worker:latest|g" ./k8s/worker-deployment.yaml
+
+      - name: Apply Kubernetes manifests
+        run: |
+          kubectl apply -f ./k8s/api-deployment.yaml
+          kubectl apply -f ./k8s/api-service.yaml
+          kubectl apply -f ./k8s/worker-deployment.yaml
+          kubectl apply -f ./k8s/worker-service.yaml
+
+      - name: Restart deployments
+        run: |
+          kubectl rollout restart deployment/api
+          kubectl rollout restart deployment/worker
+
+      - name: Wait for rollout
+        run: |
+          kubectl rollout status deployment/api
+          kubectl rollout status deployment/worker
