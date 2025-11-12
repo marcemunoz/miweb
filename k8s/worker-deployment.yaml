@@ -13,7 +13,15 @@ spec:
         app: worker
     spec:
       containers:
-      - name: worker
-        image: marcemo123/worker:latest
-        ports:
-        - containerPort: 3000
+        - name: worker
+          image: marcemo123/worker:latest
+          env:
+            - name: TICK_MS
+              value: "5000"
+          resources:
+            requests:
+              cpu: "50m"
+              memory: "64Mi"
+            limits:
+              cpu: "200m"
+              memory: "128Mi"

@@ -1,6 +1,12 @@
 {
-  "name":"api",
-  "version":"1.0.0",
-  "main":"index.js",
-  "scripts":{"start":"node index.js","test":"node -e \"console.log('API test OK')\""}
+  "name": "miweb-api",
+  "version": "1.0.0",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "test": "node -e \"console.log('Tests API OK')\""
+  },
+  "dependencies": {
+    "express": "^4.18.2"
+  }
 }
